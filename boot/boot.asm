@@ -1,5 +1,5 @@
 ; boot.asm - BIOS bootloader for x86 Legacy (CD-ROM boot)
-; This code loads the kernel from CD-ROM using BIOS INT 13h extensions.
+; Loads the kernel from CD-ROM using BIOS INT 13h extensions.
 
 BITS 16
 ORG 0x7C00
@@ -10,18 +10,20 @@ start:
     mov ss, ax
     mov sp, 0x7C00
 
-    ; Print message
+    ; Print loading message
     mov si, msg
     call print_string
 
-    ; Use INT 13h extensions to read kernel sector from CD-ROM
+    ; Prepare Disk Address Packet (DAP) and call INT 13h extensions
     mov ah, 0x42            ; Extended Read
-    mov dl, 0xE0            ; Drive number (CD-ROM, BIOS usually assigns E0h+)
-    mov si, dap             ; Disk Address Packet
+    mov dl, 0xE0            ; Drive number (CD-ROM, usually E0h+)
+    mov bx, dap             ; ES:BX points to DAP
+    mov ds, ax              ; DS = 0
+    mov es, ax              ; ES = 0
     int 0x13
-    jc disk_error
+    jc disk_error           ; Jump if carry flag set (error)
 
-    ; Jump to kernel loaded at 0x8000
+    ; Jump to kernel loaded at 0x0000:0x8000
     jmp 0x0000:0x8000
 
 disk_error:
@@ -29,27 +31,31 @@ disk_error:
     call print_string
     hlt
 
+; --- Print string routine ---
 print_string:
-    lodsb
-    or al, al
+    lodsb                   ; Load next byte from DS:SI into AL
+    or al, al               ; Check for null terminator
     jz .done
-    mov ah, 0x0E
+    mov ah, 0x0E            ; BIOS teletype output
+    mov bh, 0x00            ; Page number
+    mov bl, 0x07            ; Text attribute (light gray on black)
     int 0x10
     jmp print_string
 .done:
     ret
 
+; --- Messages ---
 msg db "Loading kernel from CD...",0
 err db "CD read error!",0
 
-; Disk Address Packet (DAP) for INT 13h extensions
+; --- Disk Address Packet (DAP) ---
 dap:
-    db 16                  ; size of packet
-    db 0                   ; reserved
-    dw 1                   ; number of sectors
-    dw 0x8000              ; buffer offset
-    dw 0x0000              ; buffer segment
-    dq 2                   ; starting LBA (kernel at sector 2)
+    db 16                   ; Size of packet
+    db 0                    ; Reserved
+    dw 1                    ; Number of sectors to read
+    dw 0x8000               ; Buffer offset
+    dw 0x0000               ; Buffer segment
+    dq 2                    ; Starting LBA (kernel at sector 2)
 
 TIMES 510-($-$$) db 0
-DW 0xAA55
+DW 0xAA55                   ; Boot signature
