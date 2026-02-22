@@ -7,19 +7,46 @@ extern handle_mouse
 
 section .text
 
+; Load IDT pointer
+; Argument: pointer to IDT descriptor in eax
 load_idt:
-    mov eax, [esp+4]
     lidt [eax]
     ret
 
+; Timer interrupt (IRQ0)
 irq0:
-    pusha
-    ; timer interrupt stub
+    cli                 ; disable interrupts
+    pusha               ; save general registers
+    push ds
+    push es
+    push fs
+    push gs
+
+    ; timer interrupt handler could be called here
+
+    pop gs
+    pop fs
+    pop es
+    pop ds
     popa
+    sti                 ; re-enable interrupts
     iretd
 
+; Mouse interrupt (IRQ12)
 irq12:
+    cli
     pusha
-    call handle_mouse
+    push ds
+    push es
+    push fs
+    push gs
+
+    call handle_mouse   ; call C handler
+
+    pop gs
+    pop fs
+    pop es
+    pop ds
     popa
+    sti
     iretd
